@@ -1933,7 +1933,7 @@
     function showOnline(){clear();const w=document.createElement('div');w.className='pkMenu';w.innerHTML='<h2>🌐 أونو أونلاين</h2><p class="pkSub">أنشئ غرفة حتى 8 لاعبين، أو ادخل بكود الغرفة.</p>';const a=document.createElement('button');a.className='pkModeBtn';a.innerHTML='<span class="pkModeIcon">🆕</span><span><b>إنشاء غرفة</b><small>حتى 8 لاعبين</small></span>';a.onclick=hostRoom;const b=document.createElement('button');b.className='pkModeBtn';b.innerHTML='<span class="pkModeIcon">🔑</span><span><b>دخول غرفة</b><small>أدخل الكود</small></span>';b.onclick=joinRoom;const c=document.createElement('button');c.className='pkModeBtn';c.innerHTML='<span class="pkModeIcon">⬅️</span><span><b>رجوع</b></span>';c.onclick=intro;w.append(a,b,c);container.appendChild(w)}
     function loadPeer(){return new Promise((res,rej)=>{if(window.Peer)return res();const s=document.createElement('script');s.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s)})}
     function hostRoom(){clear();const w=document.createElement('div');w.className='pkMenu';w.innerHTML='<h2>🆕 تجهيز غرفة أونو...</h2><p class="pkSub">حد أقصى 8 لاعبين</p>';container.appendChild(w);loadPeer().then(()=>tryHost(0)).catch(()=>onlineError('تعذر تحميل خدمة الاتصال.'));
-      function tryHost(attempt){const code=String(Math.floor(1000+Math.random()*9000));const p=new Peer('uno'+code,{debug:0});p.on('open',()=>{peer=p;isHost=true;roomCode=code;myId='A';showLobby()});p.on('connection',c=>{c.on('open',()=>acceptGuest(c))});p.on('error',e=>{if(attempt<4&&String(e).includes('unavailable-id'))tryHost(attempt+1);else onlineError('تعذر إنشاء الغرفة.')})}
+      function tryHost(attempt){const code=String(Math.floor(1000+Math.random()*9000));const p=new Peer('uno'+code,{host:'0.peerjs.com',port:443,path:'/',secure:true,debug:0});p.on('open',()=>{peer=p;isHost=true;roomCode=code;myId='A';showLobby()});p.on('connection',c=>{acceptGuest(c)});p.on('error',e=>{if(attempt<4&&String(e).includes('unavailable-id'))tryHost(attempt+1);else onlineError('تعذر إنشاء الغرفة.')})}
     }
     function showLobby(){clear();const w=document.createElement('div');w.className='pkMenu';w.innerHTML='<h2>🃏 غرفة أونو جاهزة</h2><div class="roomCodeBox">'+roomCode+'</div><p class="pkSub">شارك الكود مع أصدقائك — <b>2 إلى 8 لاعبين</b></p><div id="unoLobbyList" class="unoLobbyList"></div>';const start=document.createElement('button');start.className='actionBtn';start.textContent='▶️ ابدأ المباراة';start.onclick=()=>{if(Object.keys(peers).length<1){toast('لازم لاعب ثاني على الأقل');return}state={players:[{id:'A',name:myName}],round:1};Object.keys(peers).forEach(id=>state.players.push({id,name:peers[id].name||'لاعب'}));startRound()};const back=document.createElement('button');back.className='actionBtn secondary';back.textContent='⬅️ رجوع';back.onclick=()=>{if(peer)peer.destroy();backBtn.click()};w.append(start,back);container.appendChild(w);updateLobby()}
     function updateLobby(){const list=container.querySelector('#unoLobbyList');if(!list)return;const names=[{id:'A',name:myName},...Object.entries(peers).map(([id,x])=>({id,name:x.name}))];list.innerHTML=names.map((p,i)=>'<div class="unoLobbyItem"><span>'+(i===0?'👑':'👤')+'</span><b>'+esc(p.name||'لاعب')+'</b><small>مقعد '+(i+1)+'</small></div>').join('')}
@@ -1954,8 +1954,10 @@
         updateLobby();
       });
       c.on('error',()=>{});
-      try{c.send({type:'assigned',id})}catch(e){}
+      const sendAssigned=()=>{try{c.send({type:'assigned',id})}catch(e){}};
+      if(c.open) sendAssigned(); else c.on('open',sendAssigned);
       updateLobby();
+      broadcastLobby();
     }
     function broadcastLobby(){
       const players=[{id:'A',name:myName}];
@@ -1963,7 +1965,28 @@
       broadcast({type:'lobby',players});
     }
     function joinRoom(){clear();const w=document.createElement('div');w.className='pkMenu';w.innerHTML='<h2>🔑 دخول غرفة</h2><p class="pkSub">أدخل كود الغرفة واسمك</p>';const code=document.createElement('input');code.className='roomInput';code.maxLength=4;code.inputMode='numeric';code.placeholder='0000';const name=document.createElement('input');name.className='roomInput';name.maxLength=16;name.placeholder='اسمك';name.style.marginTop='8px';const b=document.createElement('button');b.className='actionBtn';b.textContent='🚪 دخول';b.onclick=()=>{if(code.value.trim().length!==4)return;myName=name.value.trim()||'لاعب';joinCode(code.value.trim())};w.append(code,name,b);container.appendChild(w)}
-    function joinCode(code){clear();const w=document.createElement('div');w.className='pkMenu';w.innerHTML='<h2>🔄 جاري الاتصال...</h2>';container.appendChild(w);loadPeer().then(()=>{const p=new Peer();p.on('open',()=>{peer=p;conn=p.connect('uno'+code,{reliable:true});conn.on('open',()=>{conn.on('data',m=>handleNet('A',m))});conn.on('error',()=>onlineError('تعذر الاتصال بالغرفة.'))});p.on('error',()=>onlineError('تعذر الاتصال بالغرفة.'))}).catch(()=>onlineError('تعذر تحميل خدمة الاتصال.'))}
+    function joinCode(code){
+      clear();
+      const w=document.createElement('div');w.className='pkMenu';
+      w.innerHTML='<h2>🔄 جاري الاتصال...</h2><p class="pkSub">جارِ البحث عن الغرفة وربط جهازك...</p>';
+      container.appendChild(w);
+      loadPeer().then(()=>{
+        const p=new Peer(undefined,{host:'0.peerjs.com',port:443,path:'/',secure:true,debug:0});
+        let settled=false;
+        const fail=()=>{if(settled)return;settled=true;onlineError('تعذر الاتصال بالغرفة. تأكد أن الكود صحيح وأن الجهازين متصلان بالإنترنت.');};
+        const timer=setTimeout(fail,15000);
+        p.on('open',()=>{
+          peer=p;
+          const c=p.connect('uno'+code,{reliable:true,serialization:'json'});
+          conn=c;
+          c.on('data',m=>handleNet('A',m));
+          c.on('open',()=>{clearTimeout(timer);settled=true;});
+          c.on('close',()=>{if(!destroyed&&!settled)fail();});
+          c.on('error',fail);
+        });
+        p.on('error',fail);
+      }).catch(()=>onlineError('تعذر تحميل خدمة الاتصال.'));
+    }
     function handleNet(from,msg){if(!msg||!msg.type)return;
       if(isHost){
         if(msg.type==='hello'){
