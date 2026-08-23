@@ -1937,18 +1937,52 @@
     }
     function showLobby(){clear();const w=document.createElement('div');w.className='pkMenu';w.innerHTML='<h2>🃏 غرفة أونو جاهزة</h2><div class="roomCodeBox">'+roomCode+'</div><p class="pkSub">شارك الكود مع أصدقائك — <b>2 إلى 8 لاعبين</b></p><div id="unoLobbyList" class="unoLobbyList"></div>';const start=document.createElement('button');start.className='actionBtn';start.textContent='▶️ ابدأ المباراة';start.onclick=()=>{if(Object.keys(peers).length<1){toast('لازم لاعب ثاني على الأقل');return}state={players:[{id:'A',name:myName}],round:1};Object.keys(peers).forEach(id=>state.players.push({id,name:peers[id].name||'لاعب'}));startRound()};const back=document.createElement('button');back.className='actionBtn secondary';back.textContent='⬅️ رجوع';back.onclick=()=>{if(peer)peer.destroy();backBtn.click()};w.append(start,back);container.appendChild(w);updateLobby()}
     function updateLobby(){const list=container.querySelector('#unoLobbyList');if(!list)return;const names=[{id:'A',name:myName},...Object.entries(peers).map(([id,x])=>({id,name:x.name}))];list.innerHTML=names.map((p,i)=>'<div class="unoLobbyItem"><span>'+(i===0?'👑':'👤')+'</span><b>'+esc(p.name||'لاعب')+'</b><small>مقعد '+(i+1)+'</small></div>').join('')}
-    function acceptGuest(c){if(state&&state.hands){c.send({type:'full'});c.close();return}if(Object.keys(peers).length>=MAX_PLAYERS-1){c.send({type:'full'});c.close();return}const id=String.fromCharCode(66+Object.keys(peers).length);peers[id]={conn:c,name:'لاعب '+(Object.keys(peers).length+2)};c.on('data',m=>handleNet(id,m));c.on('close',()=>{delete peers[id];if(state){state.players=state.players.filter(p=>p.id!==id);if(state.turn===id)state.turn=state.players[0]?.id||'A';sendStates()}updateLobby()});c.send({type:'assigned',id});updateLobby()}
+    function acceptGuest(c){
+      if(state&&state.hands){try{c.send({type:'full'});c.close()}catch(e){}return}
+      if(Object.keys(peers).length>=MAX_PLAYERS-1){try{c.send({type:'full'});c.close()}catch(e){}return}
+      const id=String.fromCharCode(66+Object.keys(peers).length);
+      peers[id]={conn:c,name:'لاعب '+(Object.keys(peers).length+2),ready:false};
+      c.on('data',m=>handleNet(id,m));
+      c.on('close',()=>{
+        delete peers[id];
+        if(state){
+          state.players=state.players.filter(p=>p.id!==id);
+          if(state.turn===id)state.turn=state.players[0]?.id||'A';
+          sendStates();
+        }
+        broadcastLobby();
+        updateLobby();
+      });
+      c.on('error',()=>{});
+      try{c.send({type:'assigned',id})}catch(e){}
+      updateLobby();
+    }
+    function broadcastLobby(){
+      const players=[{id:'A',name:myName}];
+      Object.entries(peers).forEach(([id,x])=>players.push({id,name:x.name||'لاعب'}));
+      broadcast({type:'lobby',players});
+    }
     function joinRoom(){clear();const w=document.createElement('div');w.className='pkMenu';w.innerHTML='<h2>🔑 دخول غرفة</h2><p class="pkSub">أدخل كود الغرفة واسمك</p>';const code=document.createElement('input');code.className='roomInput';code.maxLength=4;code.inputMode='numeric';code.placeholder='0000';const name=document.createElement('input');name.className='roomInput';name.maxLength=16;name.placeholder='اسمك';name.style.marginTop='8px';const b=document.createElement('button');b.className='actionBtn';b.textContent='🚪 دخول';b.onclick=()=>{if(code.value.trim().length!==4)return;myName=name.value.trim()||'لاعب';joinCode(code.value.trim())};w.append(code,name,b);container.appendChild(w)}
-    function joinCode(code){clear();const w=document.createElement('div');w.className='pkMenu';w.innerHTML='<h2>🔄 جاري الاتصال...</h2>';container.appendChild(w);loadPeer().then(()=>{const p=new Peer();p.on('open',()=>{peer=p;conn=p.connect('uno'+code,{reliable:true});conn.on('open',()=>{conn.on('data',m=>handleNet('A',m));send({type:'hello',name:myName})});conn.on('error',()=>onlineError('تعذر الاتصال بالغرفة.'))});p.on('error',()=>onlineError('تعذر الاتصال بالغرفة.'))}).catch(()=>onlineError('تعذر تحميل خدمة الاتصال.'))}
+    function joinCode(code){clear();const w=document.createElement('div');w.className='pkMenu';w.innerHTML='<h2>🔄 جاري الاتصال...</h2>';container.appendChild(w);loadPeer().then(()=>{const p=new Peer();p.on('open',()=>{peer=p;conn=p.connect('uno'+code,{reliable:true});conn.on('open',()=>{conn.on('data',m=>handleNet('A',m))});conn.on('error',()=>onlineError('تعذر الاتصال بالغرفة.'))});p.on('error',()=>onlineError('تعذر الاتصال بالغرفة.'))}).catch(()=>onlineError('تعذر تحميل خدمة الاتصال.'))}
     function handleNet(from,msg){if(!msg||!msg.type)return;
       if(isHost){
-        if(msg.type==='hello'){if(peers[from]){peers[from].name=String(msg.name||'لاعب').slice(0,16);sendTo(from,{type:'lobby',players:[{id:'A',name:myName},...Object.entries(peers).map(([id,x])=>({id,name:x.name}))]});updateLobby()}}
+        if(msg.type==='hello'){
+          if(peers[from]){
+            peers[from].name=String(msg.name||'لاعب').trim().slice(0,16)||'لاعب';
+            peers[from].ready=true;
+            broadcastLobby();
+            updateLobby();
+          }
+        }
         else if(msg.type==='play')hostPlay(from,msg.cardId,msg.color)
         else if(msg.type==='draw')hostDraw(from)
         else if(msg.type==='uno'&&state&&state.hands[from]?.length===1){state.uno[from]=true;sendStates();toast('🔥 '+playerName(from)+' قال UNO!','hot')}
         else if(msg.type==='newRound'&&state){state.round++;startRound()}
       }else{
-        if(msg.type==='assigned'){myId=msg.id}
+        if(msg.type==='assigned'){
+          myId=msg.id;
+          send({type:'hello',name:myName});
+        }
         else if(msg.type==='full')onlineError('الغرفة ممتلئة. الحد الأقصى 8 لاعبين.')
         else if(msg.type==='lobby'){clear();const w=document.createElement('div');w.className='pkMenu';w.innerHTML='<h2>✅ دخلت الغرفة</h2><p class="pkSub">بانتظار المضيف يبدأ المباراة...</p><div class="unoLobbyList">'+msg.players.map((p,i)=>'<div class="unoLobbyItem"><span>👤</span><b>'+esc(p.name)+'</b><small>مقعد '+(i+1)+'</small></div>').join('')+'</div>';container.appendChild(w)}
         else if(msg.type==='start')toast('🔥 بدأت المباراة!')
