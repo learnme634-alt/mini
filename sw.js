@@ -1,6 +1,6 @@
 // غيّر رقم النسخة (v1 -> v2 -> v3...) مع كل نشر جديد على GitHub
 // هذا هو السطر الوحيد اللي لازم تعدله بكل تحديث
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `play-platform-${CACHE_VERSION}`;
 
 const urlsToCache = [
