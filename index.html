@@ -1870,8 +1870,21 @@
       let pts=0;state.players.forEach(p=>{if(p.id===winner)return;state.hands[p.id].forEach(c=>{if(typeof c.value==='number')pts+=c.value;else if(['skip','reverse','draw2'].includes(c.value))pts+=20;else pts+=50})});state.scores[winner]=(state.scores[winner]||0)+pts;return pts;
     }
     function sanitize(forId){
-      const hands={};state.players.forEach(p=>hands[p.id]=p.id===forId?state.hands[p.id]:state.hands[p.id].map(()=>({back:true})));
-      return {players:state.players,deckCount:state.deck.length,discard:[state.discard[state.discard.length-1]],hands,currentColor:state.currentColor,turn:state.turn,direction:state.direction,pendingDraw:state.pendingDraw,uno:state.uno,scores:state.scores,round:state.round};
+      const hands={};
+      state.players.forEach(p=>hands[p.id]=p.id===forId?state.hands[p.id]:state.hands[p.id].map(()=>({back:true})));
+      return {
+        players: state.players,
+        deck: { length: state.deck.length }, 
+        discard: [state.discard[state.discard.length-1]],
+        hands,
+        currentColor: state.currentColor,
+        turn: state.turn,
+        direction: state.direction,
+        pendingDraw: state.pendingDraw,
+        uno: state.uno,
+        scores: state.scores,
+        round: state.round
+      };
     }
     function sendStates(){
       if(!state)return;send({type:'state',state:sanitize('A')});Object.keys(peers).forEach(id=>sendTo(id,{type:'state',state:sanitize(id)}));render();
