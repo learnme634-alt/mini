@@ -394,6 +394,9 @@
   .unoHand.dragging{cursor:grabbing;scroll-behavior:auto}
   .unoHandSlot{margin-left:-22px;transition:transform .22s,margin .22s;transform:rotate(calc((var(--i) - 3) * 1deg)) translateY(calc(abs(var(--i) - 3) * 1px));flex:0 0 auto}.unoHandSlot:first-child{margin-left:0}.unoHandSlot:hover{margin-left:2px;margin-right:20px;transform:translateY(-24px) rotate(0deg) scale(1.06);z-index:20}.unoHand .unoCard.playable{animation:unoPlayable 1.25s ease-in-out infinite}
   .unoHandCount{position:absolute;top:2px;right:14px;font-size:11px;opacity:.6;z-index:5;background:rgba(0,0,0,.3);padding:2px 9px;border-radius:20px}
+  .unoHand.gridView{flex-wrap:wrap;overflow-x:visible;overflow-y:auto;max-height:230px;justify-content:center;padding-top:14px;cursor:default;gap:8px 4px}
+  .unoHand.gridView .unoHandSlot{margin:0!important;transform:none!important}
+  .unoHand.gridView .unoHandSlot:hover{margin:0!important;transform:translateY(-8px) scale(1.06)!important;z-index:20}
   .unoBack{width:43px;height:64px;margin-left:-14px;border-radius:8px;background:repeating-linear-gradient(45deg,#211532 0 5px,#3c1f59 5px 10px);border:2px solid #fff;box-shadow:0 6px 12px rgba(0,0,0,.4);transform:rotate(calc(var(--i,0)*2deg));transition:.25s}.unoBack:hover{transform:translateY(-5px)}
   .unoStatus{top:auto;left:auto;transform:none;width:auto;display:flex;flex-direction:column;gap:2px;min-height:42px;font-size:17px}.unoStatus span{font-size:11px;opacity:.8}.unoRoundInfo{font-size:10px;opacity:.55;margin-top:-5px}.unoScoreboard{display:flex;gap:5px;max-width:96%;overflow:auto;justify-content:center;padding:3px 0}.unoScoreboard span{white-space:nowrap;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);padding:4px 7px;border-radius:12px;font-size:9px}
   .unoTurnRing{position:absolute;left:50%;top:50%;width:230px;height:145px;transform:translate(-50%,-50%);border-radius:50%;border:2px solid rgba(255,223,72,.15);box-shadow:0 0 45px rgba(255,213,58,.08);pointer-events:none;z-index:2}.unoTurnRing.flash{animation:unoRing .55s ease-out}
@@ -2086,6 +2089,19 @@
     const SYMBOL={skip:'⊘',reverse:'⇄',draw2:'+2',wild:'★',wild4:'+4'};
     let state=null, turnToken=0;
     let lastTopId=null, lastMyLen=null, lastTurnId=null;
+    let handSorted=false, handGrid=false;
+    const VALUE_RANK={skip:10,reverse:11,draw2:12,wild:13,wild4:14};
+    const COLOR_RANK={red:0,yellow:1,green:2,blue:3,wild:4};
+    function sortHandForDisplay(arr){
+      if(!handSorted)return arr;
+      return [...arr].sort((a,b)=>{
+        const ca=COLOR_RANK[a.color]??5, cb=COLOR_RANK[b.color]??5;
+        if(ca!==cb)return ca-cb;
+        const va=typeof a.value==='number'?a.value:VALUE_RANK[a.value]??20;
+        const vb=typeof b.value==='number'?b.value:VALUE_RANK[b.value]??20;
+        return va-vb;
+      });
+    }
     function playSfx(name){ sfx(name); }
 
     function esc(v){return String(v??'').replace(/[&<>'"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[m]));}
@@ -2097,6 +2113,7 @@
     function allPlayerIds(){return state?state.players.map(p=>p.id):[]}
     function playerName(id){const p=state?.players.find(x=>x.id===id);return p?.name||id}
     function nextId(id,steps=1){if(!state)return id;const ids=allPlayerIds(),i=ids.indexOf(id);if(i<0)return id;let n=(i+state.direction*steps)%ids.length;if(n<0)n+=ids.length;return ids[n]}
+    function setTurn(id){state.turn=id;state.drawnThisTurn=false}
     function makeDeck(){
       const d=[];let id=0;
       for(const c of COLORS){
@@ -2138,6 +2155,7 @@
       turn:state.players[0].id,
       direction:1,
       pendingDraw:0,
+      drawnThisTurn:false,
       uno:{},
       scores: state.scores || {}, 
       round:state?.round||1
@@ -2165,6 +2183,7 @@
         turn: state.turn,
         direction: state.direction,
         pendingDraw: state.pendingDraw,
+        drawnThisTurn: state.drawnThisTurn,
         uno: state.uno,
         scores: state.scores,
         round: state.round
@@ -2189,9 +2208,9 @@
       lastTopId=null;lastMyLen=null;lastTurnId=null;
       state=makeState();state.players.forEach(p=>{state.scores[p.id]=state.scores[p.id]||0;state.uno[p.id]=false});
       const first=state.discard[0];
-      if(first.value==='skip')state.turn=nextId(state.turn);
+      if(first.value==='skip')setTurn(nextId(state.turn));
       else if(first.value==='reverse')state.direction=-1;
-      else if(first.value==='draw2'){state.pendingDraw=2;state.turn=nextId(state.turn)}
+      else if(first.value==='draw2'){state.pendingDraw=2;setTurn(nextId(state.turn))}
       else if(first.value==='wild'||first.value==='wild4')state.currentColor=COLORS[Math.floor(Math.random()*4)];
       sendStates();toast('🔥 الجولة '+state.round+' بدأت!');playSfx('shuffle');
     }
@@ -2206,9 +2225,9 @@
       if((card.value==='wild'||card.value==='wild4')&&!COLORS.includes(color)){sendTo(id,{type:'needColor'});return}
       hand.splice(idx,1);state.discard.push(card);state.currentColor=card.color==='wild'?color:card.color;state.uno[id]=false;
       if(hand.length===0){const pts=scoreRound(id);sendStates();broadcast({type:'roundOver',winner:id,pts,scores:state.scores});finishOverlay(id,pts);return}
-      if(card.value==='skip')state.turn=nextId(id,2);
-      else if(card.value==='reverse')state.turn=nextId(id,state.players.length===2?2:1);
-      else {state.turn=nextId(id);if(card.value==='draw2')state.pendingDraw=2;else if(card.value==='wild4')state.pendingDraw=4;else state.pendingDraw=0}
+      if(card.value==='skip')setTurn(nextId(id,2));
+      else if(card.value==='reverse')setTurn(nextId(id,state.players.length===2?2:1));
+      else {setTurn(nextId(id));if(card.value==='draw2')state.pendingDraw=2;else if(card.value==='wild4')state.pendingDraw=4;else state.pendingDraw=0}
       if(state.pendingDraw&&card.value!=='draw2'&&card.value!=='wild4')state.pendingDraw=0;
       sendStates();animateCardToCenter(card.id);pulseTurn();
     }
@@ -2227,10 +2246,9 @@
       const n=state.pendingDraw||1;
       const drawn=drawCards(id,n);
       state.pendingDraw=0;
-      
-      // تم مسح السطر ( state.turn=nextId(id); ) حتى ما ينتقل الدور للثاني إجبارياً
-      // هسه اللاعب يسحب ويبقى الدور عنده حتى يلعب
-      
+      state.drawnThisTurn=true;
+
+      // الدور يضل عند اللاعب حتى يلعب (يقدر يسحب أكثر من مرة إذا حاب)
       sendStates();
       toast(n>1?'😵 اسحب '+n+' كروت':'🃏 سحبت كارت');
       playSfx('cardDraw');
@@ -2249,7 +2267,7 @@
       const table=document.createElement('div');table.className='unoTable';
       const ring=document.createElement('div');ring.className='unoTurnRing';table.appendChild(ring);
       const players=document.createElement('div');players.className='unoPlayersAround';
-      oppIds.forEach((id,i)=>{const p=state.players.find(x=>x.id===id);const box=document.createElement('div');box.className='unoPlayer '+(state.turn===id?'active':'')+' seat'+(i%6);box.innerHTML='<div class="avatar">'+esc((p.name||'لاعب').slice(0,1))+'</div><div class="name">'+esc(p.name)+'</div><div class="count">🃏 '+state.hands[id].length+'</div><div class="unoTinyBar"><span style="width:'+Math.min(100,state.hands[id].length*10)+'%"></span></div>';players.appendChild(box)});table.appendChild(players);
+      oppIds.forEach((id,i)=>{const p=state.players.find(x=>x.id===id);const box=document.createElement('div');box.className='unoPlayer '+(state.turn===id?'active':'')+' seat'+(i%6);box.innerHTML='<div class="avatar">'+esc((p.name||'لاعب').slice(0,1))+'</div><div class="name">'+esc(p.name)+'</div><div class="count">🃏 ؟</div>';players.appendChild(box)});table.appendChild(players);
       const center=document.createElement('div');center.className='unoCenter';
       const draw=document.createElement('div');draw.className='unoPile unoDraw';draw.innerHTML='<div class="unoBackFace"><span>UNO</span></div><span class="unoDeckLabel">'+state.deck.length+'</span>';draw.onclick=drawAction;center.appendChild(draw);
       const disc=document.createElement('div');disc.className='unoPile unoDiscard '+(COLOR_CLASS[top.color]||'unoWild');disc.innerHTML=cardHTML(top).replace('unoCard ','unoCard discardCard ');center.appendChild(disc);table.appendChild(center);
@@ -2259,14 +2277,17 @@
       const actions=document.createElement('div');actions.className='unoActions';
       const db=document.createElement('button');db.className='unoBtn primary';db.textContent=state.pendingDraw?'🃏 اسحب +'+state.pendingDraw:'🃏 اسحب كارت';db.disabled=state.turn!==myId;db.onclick=drawAction;actions.appendChild(db);
       const ub=document.createElement('button');ub.className='unoBtn red';ub.textContent='🔥 UNO!';ub.disabled=me.length!==1;ub.onclick=callUno;actions.appendChild(ub);
+      const sb=document.createElement('button');sb.className='unoBtn'+(handSorted?' primary':'');sb.textContent='🔀 ترتيب';sb.onclick=()=>{playSfx('click');handSorted=!handSorted;render()};actions.appendChild(sb);
+      const gb=document.createElement('button');gb.className='unoBtn'+(handGrid?' primary':'');gb.textContent=handGrid?'📜 عرض شريط':'🔳 عرض الكل';gb.onclick=()=>{playSfx('click');handGrid=!handGrid;render()};actions.appendChild(gb);
       table.appendChild(actions);
-      const hand=document.createElement('div');hand.className='unoHand';
-      const overlap = me.length>16 ? -34 : me.length>11 ? -28 : me.length>7 ? -24 : -18;
-      me.forEach((c,i)=>{const holder=document.createElement('div');holder.className='unoHandSlot';holder.style.setProperty('--i',Math.min(i,6));if(i>0)holder.style.marginLeft=overlap+'px';holder.innerHTML=cardHTML(c,{playable:state.turn===myId&&isPlayable(c),disabled:state.turn!==myId||!isPlayable(c)});const el=holder.firstElementChild;el.onclick=()=>playCard(c.id);hand.appendChild(holder)});
+      const hand=document.createElement('div');hand.className='unoHand'+(handGrid?' gridView':'');
+      const displayHand=sortHandForDisplay(me);
+      const overlap = handGrid ? 0 : (me.length>16 ? -34 : me.length>11 ? -28 : me.length>7 ? -24 : -18);
+      displayHand.forEach((c,i)=>{const holder=document.createElement('div');holder.className='unoHandSlot';holder.style.setProperty('--i',Math.min(i,6));if(i>0&&!handGrid)holder.style.marginLeft=overlap+'px';holder.innerHTML=cardHTML(c,{playable:state.turn===myId&&isPlayable(c),disabled:state.turn!==myId||!isPlayable(c)});const el=holder.firstElementChild;el.onclick=()=>playCard(c.id);hand.appendChild(holder)});
       if(me.length>7){const cnt=document.createElement('div');cnt.className='unoHandCount';cnt.textContent='🃏 '+me.length+' كرت';hand.appendChild(cnt)}
       table.appendChild(hand);
       enableDragScroll(hand);
-      if(me.length>7)setTimeout(()=>{hand.scrollLeft=(hand.scrollWidth-hand.clientWidth)/2},0);
+      if(me.length>7&&!handGrid)setTimeout(()=>{hand.scrollLeft=(hand.scrollWidth-hand.clientWidth)/2},0);
       const score=document.createElement('div');score.className='unoScoreboard';state.players.forEach(p=>{const s=document.createElement('span');s.innerHTML='<b>'+esc(p.name)+'</b> '+(state.scores[p.id]||0);score.appendChild(s)});table.appendChild(score);
       wrap.appendChild(table);container.appendChild(wrap);statsEl.textContent='أونو • '+state.players.length+' لاعبين • الجولة '+state.round;
       setTimeout(()=>pulseTurn(),30);
