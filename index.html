@@ -1306,35 +1306,29 @@
   /* =========================================================
      6) TIC TAC TOE — اكس أو
   ========================================================= */
-  function initTicTacToe(container, statsEl){
-    let destroyed = false;
-    let mode = 'local'; // 'local' | 'online'
-    let peer = null, conn = null, isHost = false, myRole = 'X';
+   function initTicTacToe(container){
+    const wrap=document.createElement('div'); wrap.className='domGame';
+    container.appendChild(wrap);
 
-    let board = Array(9).fill(null);
-    let positions = { X:[], O:[] };
-    let turn = 'X';
-    let phase = 'place'; // 'place' | 'move'
-    let selected = null;
-    let over = false, wins = { X:0, O:0 };
+    let board, size, turn, over, wins={X:0,O:0}, WIN_REQ;
 
-    function clear(){ container.innerHTML=''; }
-
-    function showModeSelect(){
-      clear();
-      const wrap = document.createElement('div'); wrap.className = 'pkMenu';
-      wrap.innerHTML = '<h2>❌ لعبة اكس أو</h2><p class="pkSub">نظام 3 قطع فقط! بعد ما تحط 3 قطع، تبدأ تحركهم لأي خانة فاضية.</p>';
-
-      const b1 = document.createElement('button'); b1.className = 'pkModeBtn';
-      b1.innerHTML = '<span class="pkModeIcon">👥</span><span><b>نفس الجهاز</b><small>تلعبون بالتناوب على نفس الشاشة</small></span>';
-      b1.onclick = () => { sfx('click'); mode = 'local'; startGameUI(); };
-
-      const b2 = document.createElement('button'); b2.className = 'pkModeBtn';
-      b2.innerHTML = '<span class="pkModeIcon">🌐</span><span><b>أونلاين</b><small>العب مع صديق بجهاز ثاني</small></span>';
-      b2.onclick = () => { sfx('click'); mode = 'online'; showOnlineChoice(); };
-
-      wrap.append(b1, b2);
-      container.appendChild(wrap);
+    function showSizeSelect(){
+      wrap.innerHTML='';
+      const title=document.createElement('div');
+      title.style.cssText='text-align:center;font-size:19px;font-weight:bold;margin-bottom:14px';
+      title.textContent='📐 اختر حجم اللوحة';
+      wrap.appendChild(title);
+      
+      const grid=document.createElement('div'); grid.className='kidLevelGrid'; grid.style.maxWidth='380px';
+      const sizes = [3,4,5,6,7];
+      sizes.forEach(s=>{
+        const b=document.createElement('button'); b.className='kidLevelBtn';
+        b.innerHTML = `<span class="num" style="font-size:22px">${s}×${s}</span><span class="lbl">توصيل ${s===3?3:s===4?4:s} لغرض الفوز</span>`;
+        b.addEventListener('click', ()=>{ sfx('click'); size=s; WIN_REQ=s===3?3:(s===4?4:s); startRound(); });
+        grid.appendChild(b);
+      });
+      wrap.appendChild(grid);
+      setStats('');
     }
 
     // --- إعدادات الأونلاين ---
