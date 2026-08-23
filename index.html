@@ -597,6 +597,8 @@
     function spawnDust(x,y){ for(let i=0;i<6;i++) particles.push({x,y,vx:(Math.random()-0.5)*3,vy:-Math.random()*2,life:20+Math.random()*10,r:2+Math.random()*2,color:'rgba(255,255,255,0.8)'}); }
     function spawnHit(x,y){ for(let i=0;i<14;i++) particles.push({x,y,vx:(Math.random()-0.5)*6,vy:-Math.random()*6,life:30+Math.random()*15,r:2+Math.random()*3,color:'#ffd93b'}); }
 
+    function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
     let obstacleTimer=40, coinTimer=100;
     function spawnObstacle(){
       const types=['defender','cone','post']; const type=types[Math.floor(Math.random()*types.length)];
@@ -604,8 +606,6 @@
       obstacles.push({x:W+20,y:groundY-h,w,h,type});
     }
     function spawnCoin(){ coins.push({x:W+20,y:groundY-40-Math.random()*130,r:13,bob:Math.random()*Math.PI*2}); }
-
-    function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
 
     function update(){
       frame++;
@@ -792,15 +792,18 @@
   }
 
   /* =========================================================
-     3) MEMORY MATCH — لعبة الذاكرة الفضائية
+     3) MEMORY MATCH — لعبة الذاكرة الفضائية (معدلة لـ 100 بطاقة)
   ========================================================= */
   function initMemory(container){
-    const emojis=['🚀','🪐','⭐','🌙','☄️','👽','🛸','🌌','🌠','🌟','🔭','🛰️'];
+    // تم زيادة عدد الإيموجي إلى 50 لتغطية 100 بطاقة[cite: 1]
+    const emojis=['🚀','🪐','⭐','🌙','☄️','👽','🛸','🌌','🌠','🌟','🔭','🛰️','🌍','🌞','🌩️','🌀','🌈','⛄','🔥','💧','🍎','🍌','🍉','🍇','🍓','🍒','🍍','🥝','🍅','🥑','🍔','🍟','🍕','🌭','🍿','🍩','🍦','🍭','🍬','🍫','⚽','🏀','🏈','⚾','🎾','🏐','🎱','🏓','🎳','🎮'];
     const SIZES=[
-      { id:'s',  label:'صغيرة',    sub:'12 بطاقة', pairs:6,  cols:3 },
-      { id:'m',  label:'متوسطة',   sub:'16 بطاقة', pairs:8,  cols:4 },
-      { id:'l',  label:'كبيرة',    sub:'20 بطاقة', pairs:10, cols:4 },
-      { id:'xl', label:'كبيرة جدًا', sub:'24 بطاقة', pairs:12, cols:4 },
+      { id:'s',  label:'3×4',    sub:'12 بطاقة', pairs:6,  cols:3 },
+      { id:'m',  label:'4×4',    sub:'16 بطاقة', pairs:8,  cols:4 },
+      { id:'l',  label:'4×5',    sub:'20 بطاقة', pairs:10, cols:4 },
+      { id:'xl', label:'6×6',    sub:'36 بطاقة', pairs:18, cols:6 },
+      { id:'xxl',label:'8×8',    sub:'64 بطاقة', pairs:32, cols:8 },
+      { id:'max',label:'10×10',  sub:'100 بطاقة', pairs:50, cols:10 },
     ];
     const wrap=document.createElement('div'); wrap.className='domGame';
     container.appendChild(wrap);
@@ -813,7 +816,7 @@
       title.style.cssText='text-align:center;font-size:19px;font-weight:bold;margin-bottom:14px';
       title.textContent='📐 اختر حجم اللعبة';
       wrap.appendChild(title);
-      const grid=document.createElement('div'); grid.className='kidLevelGrid'; grid.style.maxWidth='360px';
+      const grid=document.createElement('div'); grid.className='kidLevelGrid'; grid.style.maxWidth='380px';
       SIZES.forEach(s=>{
         const b=document.createElement('button'); b.className='kidLevelBtn';
         b.innerHTML = `<span class="num" style="font-size:22px">${s.label}</span><span class="lbl">${s.sub}</span>`;
@@ -853,8 +856,15 @@
       const info=document.createElement('div'); info.style.width='100%'; info.style.maxWidth='420px';
       const grid=document.createElement('div'); grid.className='cardsGrid';
       grid.style.gridTemplateColumns=`repeat(${size.cols},1fr)`;
-      grid.style.maxHeight='58vh';
-      grid.style.overflowY='auto';
+      
+      // تعديل التناسب لحل مشكلة التمرير في الشاشات المختلفة
+      const gapSize = size.cols > 6 ? 4 : 8;
+      grid.style.gap = gapSize + 'px';
+      grid.style.width = '100%';
+      grid.style.maxWidth = 'min(100%, 500px)';
+      grid.style.aspectRatio = (size.cols) + ' / ' + (deck.length/size.cols);
+      grid.style.maxHeight = '65vh';
+
       wrap.appendChild(info); wrap.appendChild(grid);
 
       function updateInfo(){
@@ -866,14 +876,14 @@
         info.innerHTML = `
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
             <div style="flex:1;text-align:center;background:${turn===1?'rgba(78,205,196,0.22)':'rgba(255,255,255,0.06)'};border:2px solid ${turn===1?c1:'transparent'};border-radius:14px;padding:8px 6px;transition:.2s">
-              <div style="font-size:12px;opacity:.85">🅰️ اللاعب الأول</div>
+              <div style="font-size:12px;opacity:.85">🅰️ الأول</div>
               <div style="font-size:24px;font-weight:900;color:${c1}">${scores[0]}</div>
             </div>
             <div style="text-align:center;font-weight:bold;font-size:13px;white-space:nowrap">
               ${turn===1?'⬅️':''}<br>دور ${turn===1?'الأول':'الثاني'}<br>${turn===2?'➡️':''}
             </div>
             <div style="flex:1;text-align:center;background:${turn===2?'rgba(255,107,107,0.22)':'rgba(255,255,255,0.06)'};border:2px solid ${turn===2?c2:'transparent'};border-radius:14px;padding:8px 6px;transition:.2s">
-              <div style="font-size:12px;opacity:.85">🅱️ اللاعب الثاني</div>
+              <div style="font-size:12px;opacity:.85">🅱️ الثاني</div>
               <div style="font-size:24px;font-weight:900;color:${c2}">${scores[1]}</div>
             </div>
           </div>`;
@@ -881,16 +891,20 @@
 
       function render(){
         grid.innerHTML='';
+        // حساب حجم الخط ديناميكياً ليناسب الشبكات الكبيرة
+        const fontSize = size.cols <= 4 ? 'clamp(22px,7vw,32px)' : (size.cols <= 6 ? 'clamp(16px,4vw,24px)' : 'clamp(12px,3vw,18px)');
+
         deck.forEach((val,idx)=>{
           const c=document.createElement('div');
           c.className='memCard'+(flipped.includes(idx)||matched.has(idx)?' flipped':'');
+          c.style.fontSize = fontSize; 
           if(matched.has(idx)) c.classList.add('matched');
           c.textContent = (flipped.includes(idx)||matched.has(idx)) ? val : '❓';
           c.addEventListener('click', ()=>onFlip(idx));
           grid.appendChild(c);
         });
         updateInfo();
-        setStats(players===1 ? ('🔁 '+moves+' حركة') : ('🔁 '+moves+' حركة الكل &nbsp;|&nbsp; 🅰️ '+scores[0]+' — '+scores[1]+' 🅱️'));
+        setStats(players===1 ? ('🔁 '+moves+' حركة') : ('🔁 '+moves+' حركة الكل'));
       }
 
       function onFlip(idx){
@@ -905,11 +919,10 @@
             if(players===2) scores[turn-1]++;
             flipped=[]; lock=false; render(); sfx('match');
             if(matched.size===deck.length){ setTimeout(endRound, 350); return; }
-            // طابق صح ⇒ نفس اللاعب يضل يلعب دوره
           } else {
             setTimeout(()=>{
               flipped=[]; lock=false;
-              if(players===2) turn = (turn===1?2:1); // ما طابق ⇒ ينتقل الدور
+              if(players===2) turn = (turn===1?2:1);
               render(); sfx('wrong');
             }, 700);
           }
@@ -929,10 +942,8 @@
           overlay(container,'🎉 خلصت المباراة!', msg, '🔁 مباراة جديدة', ()=>{ startRound(2); }, '🏠 القائمة', ()=>{ backBtn.click(); });
         }
       }
-
       render();
     }
-
     showSizeSelect();
     return ()=>{};
   }
@@ -1219,115 +1230,122 @@
   }
 
   /* =========================================================
-     6) TIC TAC TOE — اكس أو
+     6) TIC TAC TOE — اكس أو (معدلة لأحجام 3 إلى 7)
   ========================================================= */
   function initTicTacToe(container){
-    // لعبة اكس أو لشخصين — بدون تعادل: كل لاعب حقه 3 قطع بس.
-    // أول 6 أدوار (3 لكل واحد) وضع قطع عادي. بعدها ما تنحط قطع جديدة،
-    // كل لاعب يختار وحدة من قطعه الموجودة ويحركها لخانة فاضية جنبها، وتستمر اللعبة لين واحد يفوز.
-    let board = Array(9).fill(null);
-    let positions = { X:[], O:[] };
-    let turn='X';
-    let phase='place'; // 'place' | 'move'
-    let selected=null;
-    let over=false, wins={X:0,O:0};
-
     const wrap=document.createElement('div'); wrap.className='domGame';
-    const info=document.createElement('div'); info.style.fontWeight='bold';
-    const grid=document.createElement('div'); grid.className='ticGrid';
-    wrap.appendChild(info); wrap.appendChild(grid); container.appendChild(wrap);
+    container.appendChild(wrap);
 
-    const LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-    function checkWin(b, sym){ return LINES.some(l=> l.every(i=>b[i]===sym)); }
-    function validMoveTargets(){
-      if(phase!=='move' || selected===null) return [];
-      return board.map((v,i)=>v===null ? i : null).filter(i=>i!==null);
-    }
-    function hasAnyMove(sym){
-      return board.some(v=>v===null); // أي خانة فاضية = حركة متاحة
-    }
+    let board, size, turn, over, wins={X:0,O:0}, WIN_REQ;
 
-    function updateInfo(){
-      if(over) return;
-      const name = turn==='X' ? 'الأول (X)' : 'الثاني (O)';
-      if(phase==='place') info.textContent = '🔵 دور اللاعب '+name+' — حط قطعة';
-      else if(selected===null) info.textContent = '🔵 دور اللاعب '+name+' — اختار وحدة من قطعك تريد تحركها';
-      else info.textContent = '🔵 دور اللاعب '+name+' — اضغط أي خانة فاضية عشان تحرك القطعة إلها';
-    }
-
-    function render(){
-      grid.innerHTML='';
-      const targets = validMoveTargets();
-      board.forEach((v,i)=>{
-        const c=document.createElement('div'); c.className='ticCell'; c.textContent=v||'';
-        c.style.color = v==='X' ? '#4ecdc4' : '#ff6b6b';
-        if(i===selected) c.classList.add('selected');
-        if(targets.includes(i)) c.classList.add('validMove');
-        c.addEventListener('click', ()=>cellClick(i));
-        grid.appendChild(c);
+    function showSizeSelect(){
+      wrap.innerHTML='';
+      const title=document.createElement('div');
+      title.style.cssText='text-align:center;font-size:19px;font-weight:bold;margin-bottom:14px';
+      title.textContent='📐 اختر حجم اللوحة';
+      wrap.appendChild(title);
+      
+      const grid=document.createElement('div'); grid.className='kidLevelGrid'; grid.style.maxWidth='380px';
+      const sizes = [3,4,5,6,7];
+      sizes.forEach(s=>{
+        const b=document.createElement('button'); b.className='kidLevelBtn';
+        b.innerHTML = `<span class="num" style="font-size:22px">${s}×${s}</span><span class="lbl">توصيل ${s===3?3:s===4?4:s} لغرض الفوز</span>`;
+        b.addEventListener('click', ()=>{ sfx('click'); size=s; WIN_REQ=s===3?3:(s===4?4:s); startRound(); });
+        grid.appendChild(b);
       });
-      setStats('🏆 اللاعب الأول (X): '+wins.X+' &nbsp; 🏆 اللاعب الثاني (O): '+wins.O);
-      updateInfo();
+      wrap.appendChild(grid);
+      setStats('');
     }
 
-    function afterMoveCheck(sym){
-      if(checkWin(board,sym)){
-        wins[sym]++; sfx('win');
-        render();
-        finish(sym==='X' ? '🎉 فاز اللاعب الأول (X)!' : '🎉 فاز اللاعب الثاني (O)!');
-        return true;
+    function startRound(){
+      board = Array(size*size).fill(null);
+      turn = 'X'; over = false;
+
+      wrap.innerHTML='';
+      const info=document.createElement('div'); info.style.fontWeight='bold'; info.style.marginBottom='10px';
+      const grid=document.createElement('div'); grid.className='ticGrid';
+      grid.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+      grid.style.gap = size>5 ? '4px' : '8px';
+      
+      wrap.appendChild(info); wrap.appendChild(grid);
+
+      function render(){
+        grid.innerHTML='';
+        const fontSize = size > 5 ? 'clamp(20px,6vw,30px)' : 'clamp(30px,10vw,50px)';
+        
+        board.forEach((v,i)=>{
+          const c=document.createElement('div'); c.className='ticCell'; 
+          c.textContent=v||'';
+          c.style.fontSize = fontSize;
+          c.style.color = v==='X' ? '#4ecdc4' : '#ff6b6b';
+          c.addEventListener('click', ()=>cellClick(i));
+          grid.appendChild(c);
+        });
+        
+        setStats('🏆 الأول (X): '+wins.X+' &nbsp; 🏆 الثاني (O): '+wins.O);
+        if(!over) info.textContent = `🔵 دور اللاعب ${turn==='X'?'الأول (X)':'الثاني (O)'}`;
       }
-      return false;
-    }
 
-    function endTurn(){
-      turn = turn==='X' ? 'O' : 'X';
-      selected=null;
-      if(phase==='move' && !hasAnyMove(turn)){
-        // ما عنده حركة متاحة، يرجع الدور للطرف الثاني
+      function checkWin(sym) {
+        // فحص الصفوف والأعمدة والأقطار بناءً على الحجم الديناميكي
+        for(let r=0; r<size; r++){
+          for(let c=0; c<=size-WIN_REQ; c++){
+            let win=true; for(let i=0; i<WIN_REQ; i++) if(board[r*size + c + i]!==sym) win=false;
+            if(win) return true;
+          }
+        }
+        for(let c=0; c<size; c++){
+          for(let r=0; r<=size-WIN_REQ; r++){
+            let win=true; for(let i=0; i<WIN_REQ; i++) if(board[(r+i)*size + c]!==sym) win=false;
+            if(win) return true;
+          }
+        }
+        for(let r=0; r<=size-WIN_REQ; r++){
+          for(let c=0; c<=size-WIN_REQ; c++){
+            let win1=true, win2=true;
+            for(let i=0; i<WIN_REQ; i++){
+              if(board[(r+i)*size + (c+i)]!==sym) win1=false;
+              if(board[(r+i)*size + (c+(WIN_REQ-1-i))]!==sym) win2=false;
+            }
+            if(win1||win2) return true;
+          }
+        }
+        return false;
+      }
+
+      function cellClick(i){
+        if(over || board[i]) return;
+        board[i]=turn; sfx('click');
+        
+        if(checkWin(turn)){
+          wins[turn]++; sfx('win'); render();
+          finish(`🎉 فاز اللاعب ${turn==='X'?'الأول (X)':'الثاني (O)'}!`);
+          return;
+        }
+        
+        if(!board.includes(null)){
+          sfx('gameover'); render();
+          finish('🤝 تعادل! محد فاز.');
+          return;
+        }
+        
         turn = turn==='X' ? 'O' : 'X';
+        render();
       }
+
+      function finish(msg){
+        over=true;
+        overlay(container, msg, '🔁 العب مرة ثانية', 'تغيير الحجم', ()=>{
+          startRound();
+        }, '📐 تغيير الحجم', ()=>{
+          showSizeSelect();
+        });
+      }
+
       render();
     }
 
-    function cellClick(i){
-      if(over) return;
-      const sym = turn;
-
-      if(phase==='place'){
-        if(board[i]) return;
-        board[i]=sym; positions[sym].push(i);
-        sfx('click');
-        if(afterMoveCheck(sym)) return;
-        if(positions.X.length===3 && positions.O.length===3){ phase='move'; }
-        endTurn();
-        return;
-      }
-
-      // phase === 'move'
-      if(board[i]===sym){
-        selected = (selected===i) ? null : i;
-        render();
-        return;
-      }
-      if(selected!==null && board[i]===null){
-        board[selected]=null;
-        board[i]=sym;
-        const arr=positions[sym]; arr[arr.indexOf(selected)]=i;
-        sfx('click');
-        if(afterMoveCheck(sym)) return;
-        endTurn();
-      }
-    }
-
-    function finish(msg){
-      over=true;
-      overlay(container, msg, 'تكرار المباراة او رجوع', 'مباراة جديدة', ()=>{
-        board=Array(9).fill(null); positions={X:[],O:[]}; turn='X'; phase='place'; selected=null; over=false; render();
-      });
-    }
-
-    render();
+    showSizeSelect();
     return ()=>{};
   }
 
