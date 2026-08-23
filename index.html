@@ -1306,28 +1306,328 @@
   /* =========================================================
      6) TIC TAC TOE — اكس أو
   ========================================================= */
-  function initTicTacToe(container){
-    // لعبة اكس أو لشخصين — بدون تعادل: كل لاعب حقه 3 قطع بس.
-    // أول 6 أدوار (3 لكل واحد) وضع قطع عادي. بعدها ما تنحط قطع جديدة،
-    // كل لاعب يختار وحدة من قطعه الموجودة ويحركها لخانة فاضية جنبها، وتستمر اللعبة لين واحد يفوز.
+  function initTicTacToe(container, statsEl){
+    let destroyed = false;
+    let mode = 'local'; // 'local' | 'online'
+    let peer = null, conn = null, isHost = false, myRole = 'X';
+
     let board = Array(9).fill(null);
     let positions = { X:[], O:[] };
-    let turn='X';
-    let phase='place'; // 'place' | 'move'
-    let selected=null;
-    let over=false, wins={X:0,O:0};
+    let turn = 'X';
+    let phase = 'place'; // 'place' | 'move'
+    let selected = null;
+    let over = false, wins = { X:0, O:0 };
 
-    const wrap=document.createElement('div'); wrap.className='domGame';
-    const info=document.createElement('div'); info.style.fontWeight='bold';
-    const grid=document.createElement('div'); grid.className='ticGrid';
-    wrap.appendChild(info); wrap.appendChild(grid); container.appendChild(wrap);
+    function clear(){ container.innerHTML=''; }
 
+    function showModeSelect(){
+      clear();
+      const wrap = document.createElement('div'); wrap.className = 'pkMenu';
+      wrap.innerHTML = '<h2>❌ لعبة اكس أو</h2><p class="pkSub">نظام 3 قطع فقط! بعد ما تحط 3 قطع، تبدأ تحركهم لأي خانة فاضية.</p>';
+
+      const b1 = document.createElement('button'); b1.className = 'pkModeBtn';
+      b1.innerHTML = '<span class="pkModeIcon">👥</span><span><b>نفس الجهاز</b><small>تلعبون بالتناوب على نفس الشاشة</small></span>';
+      b1.onclick = () => { sfx('click'); mode = 'local'; startGameUI(); };
+
+      const b2 = document.createElement('button'); b2.className = 'pkModeBtn';
+      b2.innerHTML = '<span class="pkModeIcon">🌐</span><span><b>أونلاين</b><small>العب مع صديق بجهاز ثاني</small></span>';
+      b2.onclick = () => { sfx('click'); mode = 'online'; showOnlineChoice(); };
+
+      wrap.append(b1, b2);
+      container.appendChild(wrap);
+    }
+
+    // --- إعدادات الأونلاين ---
+    function showOnlineChoice(){
+      clear();
+      const wrap = document.createElement('div'); wrap.className = 'pkMenu';
+      wrap.innerHTML = '<h2>🌐 اكس أو أونلاين</h2><p class="pkSub">سوّي غرفة أو ادخل بكود صاحبك.</p>';
+      const b1 = document.createElement('button'); b1.className = 'pkModeBtn'; b1.innerHTML = '<span class="pkModeIcon">🆕</span><span><b>إنشاء غرفة</b></span>';
+      b1.onclick = () => { sfx('click'); isHost = true; myRole = 'X'; hostCreateRoom(); };
+      const b2 = document.createElement('button'); b2.className = 'pkModeBtn'; b2.innerHTML = '<span class="pkModeIcon">🔑</span><span><b>دخول غرفة</b></span>';
+      b2.onclick = () => { sfx('click'); isHost = false; myRole = 'O'; guestJoinScreen(); };
+      const b3 = document.createElement('button'); b3.className = 'pkModeBtn'; b3.innerHTML = '<span class="pkModeIcon">⬅️</span><span><b>رجوع</b></span>';
+      b3.onclick = () => { sfx('click'); showModeSelect(); };
+      wrap.append(b1, b2, b3);
+      container.appendChild(wrap);
+    }
+
+    function loadPeerJs(){
+      return new Promise((resolve, reject)=>{
+        if(window.Peer){ resolve(); return; }
+        const s = document.createElement('script');
+        s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('load-fail'));
+        document.head.appendChild(s);
+      });
+    }
+
+    function hostCreateRoom(){
+      clear();
+      const wrap = document.createElement('div'); wrap.className = 'pkMenu';
+      wrap.innerHTML = '<h2>🆕 جاري إنشاء الغرفة...</h2>';
+      container.appendChild(wrap);
+      loadPeerJs().then(()=>{
+        const code = String(Math.floor(1000 + Math.random()*9000));
+        const p = new Peer('xo'+code, { debug:0 });
+        p.on('open', ()=>{
+          peer = p; clear();
+          const w = document.createElement('div'); w.className = 'pkMenu';
+          w.innerHTML = '<h2>🆕 غرفتك جاهزة</h2><p class="pkSub">أعطِ هذا الكود لصديقك</p><div class="roomCodeBox">'+code+'</div><p class="pkSub">⏳ بانتظار الخصم...</p>';
+          const back = document.createElement('button'); back.className = 'actionBtn secondary'; back.textContent = '⬅️ رجوع';
+          back.onclick = () => { if(peer) peer.destroy(); peer=null; showModeSelect(); };
+          w.appendChild(back); container.appendChild(w);
+        });
+        p.on('connection', c=>{ conn=c; setupConn(); });
+        p.on('error', ()=> showOnlineError('فشل إنشاء الغرفة. جرب مرة ثانية.'));
+      }).catch(()=>showOnlineError('تأكد من الإنترنت.'));
+    }
+
+    function guestJoinScreen(){
+      clear();
+      const wrap = document.createElement('div'); wrap.className = 'pkMenu';
+      wrap.innerHTML = '<h2>🔑 الدخول لغرفة</h2>';
+      const inp = document.createElement('input'); inp.className = 'roomInput'; inp.maxLength = 4; inp.placeholder = '0000';
+      const btn = document.createElement('button'); btn.className = 'actionBtn'; btn.textContent = '🚪 دخول'; btn.style.marginTop = '14px';
+      btn.onclick = () => {
+        if(inp.value.length === 4){
+          sfx('click'); joinRoom(inp.value);
+        }
+      };
+      wrap.append(inp, document.createElement('br'), btn);
+      container.appendChild(wrap);
+    }
+
+    function joinRoom(code){
+      clear();
+      const w = document.createElement('div'); w.className = 'pkMenu';
+      w.innerHTML = '<h2>🔄 جاري الاتصال...</h2>';
+      container.appendChild(w);
+      loadPeerJs().then(()=>{
+        const p = new Peer();
+        p.on('open', ()=>{
+          peer = p;
+          const c = p.connect('xo'+code, { reliable:true });
+          conn = c;
+          conn.on('open', ()=> setupConn());
+          conn.on('error', ()=> showOnlineError('تعذر الاتصال. تأكد من الكود.'));
+        });
+        p.on('error', ()=> showOnlineError('الكود غلط أو الغرفة مسدودة.'));
+      });
+    }
+
+    function showOnlineError(msg){
+      clear();
+      const w = document.createElement('div'); w.className = 'pkMenu';
+      w.innerHTML = '<h2>⚠️ خطأ</h2><p class="pkSub">'+msg+'</p>';
+      const b = document.createElement('button'); b.className = 'actionBtn'; b.textContent = '⬅️ رجوع';
+      b.onclick = () => { if(peer) peer.destroy(); peer=null; conn=null; showOnlineChoice(); };
+      w.appendChild(b); container.appendChild(w);
+    }
+
+    function setupConn(){
+      conn.on('data', data=>{
+        if(data.type === 'start'){ startGameUI(); }
+        else if(data.type === 'state'){ syncStateFromNet(data.state); }
+        else if(data.type === 'click'){ processMove(data.index); }
+        else if(data.type === 'rematch'){ resetMatch(); }
+      });
+      conn.on('close', ()=>{ if(!destroyed && !over) showOnlineError('انقطع الاتصال بالخصم.'); });
+
+      if(isHost){
+        conn.send({type:'start'});
+        startGameUI();
+      }
+    }
+
+    function sendNet(msg){ if(conn && conn.open) conn.send(msg); }
+    function broadcastState(){
+      if(isHost){
+        sendNet({ type: 'state', state: { board, positions, turn, phase, selected, over, wins } });
+      }
+    }
+    
+    function syncStateFromNet(s){
+      board = s.board; positions = s.positions; turn = s.turn; phase = s.phase; 
+      selected = s.selected; over = s.over; wins = s.wins;
+      render();
+      if(over) setTimeout(handleGameOverUI, 200);
+    }
+
+    // --- منطق اللعبة ---
     const LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
     function checkWin(b, sym){ return LINES.some(l=> l.every(i=>b[i]===sym)); }
+
     function validMoveTargets(){
       if(phase!=='move' || selected===null) return [];
       return board.map((v,i)=>v===null ? i : null).filter(i=>i!==null);
     }
+
+    let gridEl, infoEl;
+    function startGameUI(){
+      clear();
+      const wrap = document.createElement('div'); wrap.className = 'domGame';
+      infoEl = document.createElement('div'); infoEl.style.fontWeight = 'bold'; infoEl.style.textAlign='center';
+      gridEl = document.createElement('div'); gridEl.className = 'ticGrid';
+      wrap.append(infoEl, gridEl);
+      container.appendChild(wrap);
+      render();
+    }
+
+    function updateInfo(){
+      if(over) return;
+      if(mode==='online'){
+         const isMyTurn = (turn === myRole);
+         const roleName = turn === 'X' ? 'الأول (X)' : 'الثاني (O)';
+         if(isMyTurn){
+           if(phase==='place') infoEl.innerHTML = '🔵 دورك ('+myRole+') — حط قطعة';
+           else if(selected===null) infoEl.innerHTML = '🔵 دورك ('+myRole+') — اختار وحدة من قطعك حتى تحركها';
+           else infoEl.innerHTML = '🔵 دورك ('+myRole+') — اضغط أي خانة فاضية حتى تنقلها إلها';
+         } else {
+           infoEl.innerHTML = '⏳ بانتظار الخصم ('+roleName+') يلعب...';
+         }
+      } else {
+        const name = turn==='X' ? 'الأول (X)' : 'الثاني (O)';
+        if(phase==='place') infoEl.innerHTML = '🔵 دور اللاعب '+name+' — حط قطعة';
+        else if(selected===null) infoEl.innerHTML = '🔵 دور اللاعب '+name+' — اختار وحدة من قطعك حتى تحركها';
+        else infoEl.innerHTML = '🔵 دور اللاعب '+name+' — اضغط أي خانة فاضية حتى تنقلها إلها';
+      }
+    }
+
+    function render(){
+      if(!gridEl) return;
+      gridEl.innerHTML='';
+      const targets = validMoveTargets();
+      board.forEach((v,i)=>{
+        const c=document.createElement('div'); c.className='ticCell'; c.textContent=v||'';
+        c.style.color = v==='X' ? '#4ecdc4' : '#ff6b6b';
+        if(i===selected) c.classList.add('selected');
+        if(targets.includes(i)) c.classList.add('validMove');
+        c.addEventListener('click', ()=>{
+          if(mode==='online'){
+            if(turn !== myRole) return; // مو دورك
+            if(!isHost) {
+               // الضيف يرسل حركته للمضيف والمضيف ينفذ
+               sendNet({type: 'click', index: i});
+               // تحديث سريع للـ UI إذا كان يختار قطعته حتى ما يحس بلاك
+               if(phase==='move' && board[i]===myRole){
+                 selected = selected===i ? null : i;
+                 render();
+               }
+            } else {
+               processMove(i);
+            }
+          } else {
+            processMove(i);
+          }
+        });
+        gridEl.appendChild(c);
+      });
+      if(statsEl) statsEl.innerHTML = '🏆 الأول (X): '+wins.X+' &nbsp; 🏆 الثاني (O): '+wins.O;
+      updateInfo();
+    }
+
+    function processMove(i){
+      if(over) return;
+      const sym = turn;
+
+      if(phase === 'place'){
+        if(board[i]) return;
+        board[i]=sym; positions[sym].push(i);
+        sfx('click');
+        if(checkWin(board,sym)){ handleWin(sym); return; }
+        if(positions.X.length===3 && positions.O.length===3){ phase='move'; }
+        endTurn();
+        return;
+      }
+
+      // مرحلة النقل (phase move)
+      if(board[i]===sym){
+        selected = (selected===i) ? null : i;
+        render();
+        broadcastState();
+        return;
+      }
+      
+      if(selected!==null && board[i]===null){
+        board[selected]=null;
+        board[i]=sym;
+        const arr=positions[sym]; arr[arr.indexOf(selected)]=i;
+        sfx('click');
+        if(checkWin(board,sym)){ handleWin(sym); return; }
+        endTurn();
+      }
+    }
+
+    function endTurn(){
+      turn = turn==='X' ? 'O' : 'X';
+      selected=null;
+      render();
+      broadcastState();
+    }
+
+    function handleWin(sym){
+      wins[sym]++; sfx('win');
+      over = true;
+      render();
+      broadcastState();
+      setTimeout(handleGameOverUI, 500);
+    }
+
+    function handleGameOverUI(){
+      let msg = '';
+      if(mode==='online'){
+         const xWon = checkWin(board, 'X');
+         const oWon = checkWin(board, 'O');
+         if((xWon && myRole==='X') || (oWon && myRole==='O')) msg = '🎉 مبروك، فزت!';
+         else msg = '😢 الخصم فاز عليك';
+      } else {
+         const xWon = checkWin(board, 'X');
+         msg = xWon ? '🎉 فاز اللاعب الأول (X)!' : '🎉 فاز اللاعب الثاني (O)!';
+      }
+      
+      const div = document.createElement('div');
+      div.className = 'roundOverlay';
+      div.innerHTML = '<h2>'+msg+'</h2>';
+      const btn = document.createElement('button');
+      btn.className = 'actionBtn'; btn.textContent = '🔁 مباراة جديدة';
+      btn.onclick = () => {
+        div.remove();
+        if(mode==='online'){
+          if(!isHost) sendNet({type: 'rematch'});
+          else resetMatch();
+        } else {
+          resetMatch();
+        }
+      };
+      const btn2 = document.createElement('button');
+      btn2.className = 'actionBtn secondary'; btn2.textContent = '🏠 القائمة';
+      btn2.onclick = () => { div.remove(); if(mode==='online'){if(peer)peer.destroy(); peer=null;} backBtn.click(); };
+      
+      div.append(btn, btn2);
+      container.appendChild(div);
+    }
+
+    function resetMatch(){
+      board = Array(9).fill(null);
+      positions = { X:[], O:[] };
+      turn = 'X';
+      phase = 'place';
+      selected = null;
+      over = false;
+      render();
+      broadcastState();
+    }
+
+    showModeSelect();
+
+    return ()=>{
+      destroyed = true;
+      if(peer){ try{peer.destroy();}catch(e){} }
+      peer = null; conn = null;
+    };
+  }
     function hasAnyMove(sym){
       return board.some(v=>v===null); // أي خانة فاضية = حركة متاحة
     }
@@ -1838,11 +2138,27 @@
       return '<div class="'+cls+'" data-card-id="'+c.id+'"><div class="unoCardShine"></div><span class="oval"></span><span class="mini">'+label+'</span><span class="symbol">'+label+'</span><span class="mini2">'+label+'</span></div>';
     }
     function makeState(){
-      const deck=makeDeck(),hands={};state.players.forEach(p=>hands[p.id]=[]);
-      for(let r=0;r<7;r++)state.players.forEach(p=>hands[p.id].push(deck.pop()));
-      let top=deck.pop();while(top.color==='wild'){deck.unshift(top);top=deck.pop()}
-      return {deck,discard:[top],hands,currentColor:top.color,turn:state.players[0].id,direction:1,pendingDraw:0,uno:{},scores:{},round:state?.round||1};
-    }
+    const deck=makeDeck(),hands={};
+    state.players.forEach(p=>hands[p.id]=[]);
+    for(let r=0;r<7;r++)state.players.forEach(p=>hands[p.id].push(deck.pop()));
+    let top=deck.pop();
+    while(top.color==='wild'){deck.unshift(top);top=deck.pop()}
+    
+    // التعديل هنا: تم إضافة players و الحفاظ على حالة scores عبر الجولات
+    return {
+      players: state.players, 
+      deck,
+      discard:[top],
+      hands,
+      currentColor:top.color,
+      turn:state.players[0].id,
+      direction:1,
+      pendingDraw:0,
+      uno:{},
+      scores: state.scores || {}, 
+      round:state?.round||1
+    };
+  }
     function ensureDeck(){
       if(state.deck.length)return true;
       if(state.discard.length<=1)return false;
