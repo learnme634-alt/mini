@@ -1928,7 +1928,17 @@
       if(isHost)hostDraw(myId);else send({type:'draw'});
     }
     function hostDraw(id){
-      if(!state||state.turn!==id)return;const n=state.pendingDraw||1;const drawn=drawCards(id,n);state.pendingDraw=0;state.turn=nextId(id);sendStates();toast(n>1?'😵 اسحب '+n+' كروت':'🃏 سحبت كارت');playSfx('flip');
+      if(!state||state.turn!==id)return;
+      const n=state.pendingDraw||1;
+      const drawn=drawCards(id,n);
+      state.pendingDraw=0;
+      
+      // تم مسح السطر ( state.turn=nextId(id); ) حتى ما ينتقل الدور للثاني إجبارياً
+      // هسه اللاعب يسحب ويبقى الدور عنده حتى يلعب
+      
+      sendStates();
+      toast(n>1?'😵 اسحب '+n+' كروت':'🃏 سحبت كارت');
+      playSfx('flip');
     }
     function callUno(){if(!state||state.hands[myId]?.length!==1)return;if(isHost){state.uno[myId]=true;sendStates();toast('🔥 UNO!','hot');playSfx('win')}else{send({type:'uno'});toast('🔥 UNO!','hot')}}
     function render(){
