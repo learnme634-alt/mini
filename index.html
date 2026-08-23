@@ -882,7 +882,7 @@
   function initMemory(container){
     const emojis=['🚀','🪐','⭐','🌙','☄️','👽','🛸','🌌','🌠','🌟','🔭','🛰️'];
     const SIZES=[
-      { id:'s',  label:'صغيرة',    sub:'12 بطاقة', pairs:6,  cols:3 },
+      { id:'s',  label:'صغيرة',   sub:'12 بطاقة', pairs:6,  cols:3 },
       { id:'m',  label:'متوسطة',   sub:'16 بطاقة', pairs:8,  cols:4 },
       { id:'l',  label:'كبيرة',    sub:'20 بطاقة', pairs:10, cols:4 },
       { id:'xl', label:'كبيرة جدًا', sub:'24 بطاقة', pairs:12, cols:4 },
@@ -1815,7 +1815,7 @@
     function clear(){container.innerHTML='';}
     function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
     function send(msg){if(conn&&conn.open){try{conn.send(msg)}catch(e){}}}
-    function sendTo(id,msg){if(peers[id]&&peers[id].open){try{peers[id].send(msg)}catch(e){}}}
+    function sendTo(id,msg){if(peers[id]&&peers[id].conn&&peers[id].conn.open){try{peers[id].conn.send(msg)}catch(e){}}}
     function broadcast(msg){Object.keys(peers).forEach(id=>sendTo(id,msg))}
     function allPlayerIds(){return state?state.players.map(p=>p.id):[]}
     function playerName(id){const p=state?.players.find(x=>x.id===id);return p?.name||id}
