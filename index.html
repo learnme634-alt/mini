@@ -1838,11 +1838,27 @@
       return '<div class="'+cls+'" data-card-id="'+c.id+'"><div class="unoCardShine"></div><span class="oval"></span><span class="mini">'+label+'</span><span class="symbol">'+label+'</span><span class="mini2">'+label+'</span></div>';
     }
     function makeState(){
-      const deck=makeDeck(),hands={};state.players.forEach(p=>hands[p.id]=[]);
-      for(let r=0;r<7;r++)state.players.forEach(p=>hands[p.id].push(deck.pop()));
-      let top=deck.pop();while(top.color==='wild'){deck.unshift(top);top=deck.pop()}
-      return {deck,discard:[top],hands,currentColor:top.color,turn:state.players[0].id,direction:1,pendingDraw:0,uno:{},scores:{},round:state?.round||1};
-    }
+    const deck=makeDeck(),hands={};
+    state.players.forEach(p=>hands[p.id]=[]);
+    for(let r=0;r<7;r++)state.players.forEach(p=>hands[p.id].push(deck.pop()));
+    let top=deck.pop();
+    while(top.color==='wild'){deck.unshift(top);top=deck.pop()}
+    
+    // التعديل هنا: تم إضافة players و الحفاظ على حالة scores عبر الجولات
+    return {
+      players: state.players, 
+      deck,
+      discard:[top],
+      hands,
+      currentColor:top.color,
+      turn:state.players[0].id,
+      direction:1,
+      pendingDraw:0,
+      uno:{},
+      scores: state.scores || {}, 
+      round:state?.round||1
+    };
+  }
     function ensureDeck(){
       if(state.deck.length)return true;
       if(state.discard.length<=1)return false;
